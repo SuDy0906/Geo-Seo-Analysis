@@ -26,6 +26,10 @@ Citation scoring works **without** spaCy (`en_core_web_sm`); spaCy adds a small 
 5. **Optional secrets:** Claude‑assisted dimensions in **Citation readiness** → add `ANTHROPIC_API_KEY` under **App settings → Secrets** (see [.streamlit/secrets.toml.example](.streamlit/secrets.toml.example)).
 6. Scrape **`data/`** is empty on deploy; use **Sitemap crawler** / **Article index** inside the app to populate cache (persistent only if Cloud storage mounted; ephemeral otherwise).
 
+## Sitemaps · “Just a moment…” / HTTP 403 on Streamlit Cloud
+
+FXStreet (and many large sites) sits behind **Cloudflare**. Hosted apps often receive a **challenge HTML** instead of real sitemap/XML. **Manual URL queue** on the **Sitemap crawler** page lets you paste URLs discovered on your laptop or exported elsewhere, then **Archive queue to disk**. If **HTML** downloads also return 403 from Cloud, crawls may only work from non–datacenter networks.
+
 ## Troubleshooting installs (`blis`, `ERROR: Failed building wheel`)
 
 **Cause:** **[spaCy](https://spacy.io)** depends on **`blis`** (C extension). On **Python 3.14** (and some other combos) there is often **no pre-built wheel** for `blis`, so `pip` compiles from source and can fail unless you have full build tools—or the build is broken on that Python.
