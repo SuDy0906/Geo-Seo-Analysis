@@ -1,0 +1,6 @@
+# Optional: entity-aware tweaks in citation scoring. Requires a Python version with spaCy wheels
+# (recommend 3.11–3.12 locally or in Docker — not typical on Python 3.14 yet).
+# Install after requirements.txt:
+#   pip install -r requirements-spacy.txt
+spacy>=3.7.0,<3.8.0
+https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
