@@ -1,0 +1,10 @@
+﻿streamlit>=1.28.0
+pandas>=2.0.0
+numpy>=1.24.0
+plotly>=5.18.0
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+trafilatura>=1.6.0
+spacy>=3.7.0
+textstat>=0.7.3
+anthropic>=0.40.0
