@@ -11,10 +11,11 @@ from urllib.parse import urlparse
 
 import requests
 
+from http_session import make_fetch_session
 from seo_audit import (
-    DEFAULT_HEADERS,
     SITEMAP_ALL_URL,
     _LOC_RE,
+    attach_default_headers,
     crawl_fxstreet_sitemap_urls,
     validate_fxstreet_url,
 )
@@ -32,7 +33,7 @@ def _fetch_locs(sess: requests.Session, sitemap_url: str, timeout: float) -> lis
     try:
         resp = sess.get(sitemap_url.strip(), timeout=timeout)
         resp.raise_for_status()
-    except requests.RequestException:
+    except Exception:
         return []
     return [x.strip().rstrip("\\") for x in _LOC_RE.findall(resp.text)]
 
@@ -113,8 +114,8 @@ def discover_fxstreet_article_urls(
 
     Caps on (2) avoid unbounded network work; raise ``sitemap_all_max_pages`` if you need wider coverage.
     """
-    sess = session or requests.Session()
-    sess.headers.update(DEFAULT_HEADERS)
+    sess = session or make_fetch_session()
+    attach_default_headers(sess)
 
     found: set[str] = set()
 

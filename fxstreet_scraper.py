@@ -9,7 +9,8 @@ from typing import Literal
 import requests
 
 from article_discovery import discover_fxstreet_article_urls
-from seo_audit import SITEMAP_ALL_URL, crawl_fxstreet_sitemap_urls
+from http_session import make_fetch_session
+from seo_audit import SITEMAP_ALL_URL, attach_default_headers, crawl_fxstreet_sitemap_urls
 
 ScrapeMode = Literal["full_site", "articles"]
 
@@ -33,7 +34,8 @@ def discover_urls_for_scrape(
     URLs from dedicated news/analysis sitemaps are unioned so new stories not
     yet in ``sitemap-all`` pass are included.
     """
-    sess = session or requests.Session()
+    sess = session or make_fetch_session()
+    attach_default_headers(sess)
 
     if mode == "articles":
         return discover_fxstreet_article_urls(

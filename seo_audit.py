@@ -1,4 +1,4 @@
-"""
+﻿"""
 FXStreet-only Foundation SEO technical audit (offline HTML).
 
 Fetches a single FXStreet URL and returns checks tuned to their Next.js
@@ -16,6 +16,8 @@ from urllib.parse import urlparse
 import requests
 from bs4 import BeautifulSoup
 
+from http_session import make_fetch_session
+
 DEFAULT_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -24,6 +26,18 @@ DEFAULT_HEADERS = {
     ),
     "Accept": "text/html,application/xhtml+xml",
 }
+
+
+def attach_default_headers(sess: object) -> None:
+    """Merge ``DEFAULT_HEADERS`` onto plain ``requests`` sessions only (not curl_cffi impersonate)."""
+    mod = getattr(type(sess), "__module__", "") or ""
+    if mod.startswith("curl_cffi"):
+        return
+    headers = getattr(sess, "headers", None)
+    if headers is None or not hasattr(headers, "update"):
+        return
+    headers.update(DEFAULT_HEADERS)
+
 
 FINANCE_SCHEMA_HINTS = frozenset(
     {
@@ -141,12 +155,12 @@ def fetch_sample_fxstreet_news_article_url(
     timeout: float = 25.0,
 ) -> str | None:
     """First /news/... URL from the public Google-news sitemap (live sample)."""
-    sess = session or requests.Session()
-    sess.headers.update(DEFAULT_HEADERS)
+    sess = session or make_fetch_session()
+    attach_default_headers(sess)
     try:
         resp = sess.get(GOOGLE_NEWS_SITEMAP_URL, timeout=timeout)
         resp.raise_for_status()
-    except requests.RequestException:
+    except Exception:
         return None
     for loc in _LOC_RE.findall(resp.text):
         if "/news/" in loc.lower() and re.search(r"/news/[a-z0-9%-]+-[0-9]{10,}", loc, re.I):
@@ -174,8 +188,8 @@ def collect_fxstreet_layer1_audit_urls(
 
     Respect FXStreet crawl policies; PoC stays single-threaded GETs only.
     """
-    sess = session or requests.Session()
-    sess.headers.update(DEFAULT_HEADERS)
+    sess = session or make_fetch_session()
+    attach_default_headers(sess)
 
     ordered: list[str] = []
 
@@ -216,8 +230,8 @@ def crawl_fxstreet_sitemap_urls(
     if max_page_urls <= 0:
         return []
 
-    sess = session or requests.Session()
-    sess.headers.update(DEFAULT_HEADERS)
+    sess = session or make_fetch_session()
+    attach_default_headers(sess)
 
     page_urls: list[str] = []
     page_seen: set[str] = set()
@@ -239,7 +253,7 @@ def crawl_fxstreet_sitemap_urls(
         try:
             resp = sess.get(sm_url, timeout=timeout)
             resp.raise_for_status()
-        except requests.RequestException:
+        except Exception:
             continue
 
         locs = _LOC_RE.findall(resp.text)
@@ -422,8 +436,8 @@ def run_fxstreet_seo_audit(
     prefetched_load_seconds: float | None = None,
     prefetched_headers: dict[str, str] | None = None,
 ) -> AuditReport:
-    sess = session or requests.Session()
-    sess.headers.update(DEFAULT_HEADERS)
+    sess = session or make_fetch_session()
+    attach_default_headers(sess)
 
     report = AuditReport(
         url=url.strip(),
@@ -457,7 +471,7 @@ def run_fxstreet_seo_audit(
     else:
         try:
             resp = sess.get(report.url, timeout=timeout, allow_redirects=True)
-        except requests.RequestException as e:
+        except Exception as e:
             report.error = str(e)
             return report
 

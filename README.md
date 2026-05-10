@@ -26,9 +26,9 @@ Citation scoring works **without** spaCy (`en_core_web_sm`); spaCy adds a small 
 5. **Optional secrets:** Claude‑assisted dimensions in **Citation readiness** → add `ANTHROPIC_API_KEY` under **App settings → Secrets** (see [.streamlit/secrets.toml.example](.streamlit/secrets.toml.example)).
 6. Scrape **`data/`** is empty on deploy; use **Sitemap crawler** / **Article index** inside the app to populate cache (persistent only if Cloud storage mounted; ephemeral otherwise).
 
-## Sitemaps · “Just a moment…” / HTTP 403 on Streamlit Cloud
+## Sitemaps · Cloudflare / HTTP 403
 
-FXStreet (and many large sites) sits behind **Cloudflare**. Hosted apps often receive a **challenge HTML** instead of real sitemap/XML. **Manual URL queue** on the **Sitemap crawler** page lets you paste URLs discovered on your laptop or exported elsewhere, then **Archive queue to disk**. If **HTML** downloads also return 403 from Cloud, crawls may only work from non–datacenter networks.
+FXStreet sits behind **Cloudflare**. Deployed apps fetch sitemaps and HTML via **`curl-cffi`** (Chrome TLS impersonation — see **`http_session.py`**) instead of bare `requests`, which often clears the simple “Just a moment…” gate. Rules still vary by IP; tune **`CURL_CFFI_IMPERSONATE`** (for example `chrome131`) if needed, or set **`GEO_USE_STD_REQUESTS_ONLY=1`** to force plain `requests` for debugging. If downloads still challenge, egress from that datacenter may be flagged — run the crawler from a workstation or VPS the site trusts.
 
 ## Troubleshooting installs (`blis`, `ERROR: Failed building wheel`)
 

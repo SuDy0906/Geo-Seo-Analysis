@@ -15,7 +15,8 @@ import requests
 import trafilatura
 from bs4 import BeautifulSoup
 
-from seo_audit import DEFAULT_HEADERS, validate_fxstreet_url, _host_ok_for_fxstreet
+from http_session import make_fetch_session
+from seo_audit import attach_default_headers, validate_fxstreet_url, _host_ok_for_fxstreet
 
 _HOST_OK = _host_ok_for_fxstreet
 
@@ -217,8 +218,8 @@ def score_fxstreet_citeability(
     key = (anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY") or "").strip()
     do_claude = bool(use_claude and key)
 
-    sess = session or requests.Session()
-    sess.headers.update(DEFAULT_HEADERS)
+    sess = session or make_fetch_session()
+    attach_default_headers(sess)
 
     http_status: int
     final: str
@@ -251,7 +252,7 @@ def score_fxstreet_citeability(
     else:
         try:
             resp = sess.get(url.strip(), timeout=timeout, allow_redirects=True)
-        except requests.RequestException as e:
+        except Exception as e:
             return CiteabilityReport(
                 url=url.strip(),
                 final_url=url.strip(),

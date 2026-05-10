@@ -9,7 +9,8 @@ from urllib.parse import urlparse
 
 import requests
 
-from seo_audit import DEFAULT_HEADERS
+from http_session import make_fetch_session
+from seo_audit import attach_default_headers
 from scraper_store import SiteStore, hostname_allowed_for_store
 
 _LOC_RE = re.compile(r"<loc>\s*([^<\s]+)\s*</loc>", re.I)
@@ -28,8 +29,8 @@ def crawl_sitemap_urls(
     if max_page_urls <= 0:
         return []
 
-    sess = session or requests.Session()
-    sess.headers.update(DEFAULT_HEADERS)
+    sess = session or make_fetch_session()
+    attach_default_headers(sess)
 
     page_urls: list[str] = []
     page_seen: set[str] = set()
@@ -50,7 +51,7 @@ def crawl_sitemap_urls(
         try:
             resp = sess.get(sm_url, timeout=timeout)
             resp.raise_for_status()
-        except requests.RequestException:
+        except Exception:
             continue
 
         locs = _LOC_RE.findall(resp.text)

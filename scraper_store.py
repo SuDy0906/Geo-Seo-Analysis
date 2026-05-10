@@ -584,7 +584,7 @@ def fetch_and_store_url(
 ) -> FetchResult:
     import requests
 
-    from seo_audit import DEFAULT_HEADERS, validate_fxstreet_url, _host_ok_for_fxstreet
+    from seo_audit import attach_default_headers, validate_fxstreet_url, _host_ok_for_fxstreet
 
     init_store(store)
 
@@ -638,10 +638,10 @@ def fetch_and_store_url(
                 register_article_urls(store, [url], source="article_scraper_skip")
             return FetchResult(url, snap[1], 200, None, snap[0], skipped=True)
 
-    session.headers.update(DEFAULT_HEADERS)
+    attach_default_headers(session)
     try:
         resp = session.get(url.strip(), timeout=timeout, allow_redirects=True)
-    except requests.RequestException as e:
+    except Exception as e:
         save_page(
             url,
             store=store,

@@ -4,14 +4,12 @@ Broad sitemap crawl · stores HTML per site origin for offline scoring.
 
 from __future__ import annotations
 
-import io
 import sys
 import time
 from pathlib import Path
 from urllib.parse import urljoin
 
 import pandas as pd
-import requests
 import streamlit as st
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -20,12 +18,11 @@ if str(ROOT) not in sys.path:
 
 from fxstreet_scraper import discover_urls_for_scrape  # noqa: E402
 from generic_sitemap import crawl_sitemap_urls  # noqa: E402
-from seo_audit import DEFAULT_HEADERS, SITEMAP_ALL_URL  # noqa: E402
+from http_session import make_fetch_session  # noqa: E402
+from seo_audit import SITEMAP_ALL_URL, attach_default_headers  # noqa: E402
 from scraper_store import (  # noqa: E402
-    SiteStore,
     clear_store,
     fetch_and_store_url,
-    hostname_allowed_for_store,
     init_store,
     site_store_from_main_url,
     store_stats,
@@ -33,7 +30,10 @@ from scraper_store import (  # noqa: E402
 
 st.set_page_config(page_title="Sitemap crawler", page_icon="🌐", layout="wide")
 st.title("Sitemap crawler")
-st.caption("Collects every discoverable URL via sitemaps, ideal for sitewide benchmarking before deep editorial runs.")
+st.caption(
+    "Collects discoverable URLs via sitemaps; fetches use **browser-like TLS** when `curl-cffi` is installed "
+    "(default in `requirements.txt`) to reduce Cloudflare interstitial blocks on hosted apps."
+)
 
 origin = st.text_input(
     "Site origin",
@@ -55,8 +55,8 @@ m1.metric("Hostname", store.canonical_root_host)
 m2.metric("Indexed URLs", stats["rows"])
 m3.metric("Pages with bodies", stats["ok_bodies"])
 
-sess = requests.Session()
-sess.headers.update(DEFAULT_HEADERS)
+sess = make_fetch_session()
+attach_default_headers(sess)
 
 
 def _probe_sitemap(seed: str, *, timeout: float = 35.0) -> tuple[int | None, str]:
@@ -66,7 +66,7 @@ def _probe_sitemap(seed: str, *, timeout: float = 35.0) -> tuple[int | None, str
         body = (r.text or "")[:400].replace("\n", " ")
         suf = "…" if len(r.text or "") > 400 else ""
         return r.status_code, f"{body}{suf}"
-    except requests.RequestException as exc:
+    except Exception as exc:
         return None, str(exc)[:520]
 
 
@@ -74,44 +74,6 @@ def _cloudflare_challenge(diag: str) -> bool:
     d = diag.lower()
     return "just a moment" in d or "cf-browser-verification" in d or "/cdn-cgi/" in d
 
-
-def _bulk_url_lines(paste: str | None, file_bytes: bytes | None, file_name: str) -> list[str]:
-    """Turn textarea + optional upload into stripped URL-ish lines (CSV first column if .csv)."""
-    lines_out: list[str] = []
-
-    paste = (paste or "").strip()
-    if paste:
-        lines_out.extend([ln.strip() for ln in paste.replace("\r\n", "\n").split("\n") if ln.strip()])
-
-    if file_bytes:
-        decoded = file_bytes.decode("utf-8", errors="replace").strip()
-        if file_name.lower().endswith(".csv"):
-            df = pd.read_csv(io.BytesIO(file_bytes))
-            if len(df.columns):
-                lines_out.extend(s.strip() for s in df.iloc[:, 0].dropna().astype(str) if s.strip())
-        elif decoded:
-            # Plain text: newline‑separated URLs
-            lines_out.extend([ln.strip() for ln in decoded.splitlines() if ln.strip()])
-
-    return lines_out
-
-
-def _manual_url_queue(lines: list[str], *, store_site: SiteStore) -> tuple[list[str], list[str]]:
-    accepted: list[str] = []
-    rejected: list[str] = []
-    seen: set[str] = set()
-    for line in lines:
-        u = line.strip().strip('"').strip("'")
-        if not u.startswith("http"):
-            continue
-        host = urlparse(u).hostname or ""
-        if hostname_allowed_for_store(host, store_site):
-            if u not in seen:
-                seen.add(u)
-                accepted.append(u)
-        else:
-            rejected.append(u)
-    return accepted, rejected
 
 if store.is_fxstreet:
     st.caption(
@@ -150,15 +112,15 @@ if store.is_fxstreet:
             elif code is not None:
                 if _cloudflare_challenge(diag):
                     st.error(
-                        "**Cloudflare challenge** — the response looks like the interstitial page "
-                        '("Just a moment…"), not the real sitemap XML. Datacenter IPs '
-                        "(Streamlit Cloud included) are often forced through this check; "
-                        "plain `requests` cannot pass it. "
-                        "Use **Manual URL queue** below with a list you built on your laptop or exported from a browser session."
+                        "**Still seeing a Cloudflare interstitial** (“Just a moment…”). "
+                        "Tiered bot rules can block even browser-like clients from some datacenters; "
+                        "`curl-cffi` helps but is not guaranteed. "
+                        "Try setting env **`CURL_CFFI_IMPERSONATE`** to a newer Chrome profile (e.g. `chrome131`) "
+                        "where your host allows it, upgrade `curl-cffi`, or run the app outside strict WAF IPs."
                     )
                 else:
                     st.warning(
-                        f"Sitemap probe **HTTP {code}**. The host may block cloud datacenter egress or require different auth.\n\n"
+                        f"Sitemap probe **HTTP {code}**. The host may block cloud egress or require different auth.\n\n"
                         f"_Probe snippet:_ {diag[:280]}"
                     )
             else:
@@ -207,7 +169,8 @@ else:
                 elif code >= 400:
                     if _cloudflare_challenge(diag):
                         st.error(
-                            "**Cloudflare challenge** on the sitemap seed — see **Manual URL queue** below for a workaround."
+                            "**Cloudflare challenge** on the seed — try a newer **`CURL_CFFI_IMPERSONATE`** "
+                            "profile or run from a network the site trusts."
                         )
                     else:
                         st.warning(
@@ -215,27 +178,6 @@ else:
                             "and whether the remote site allows bots from hosted platforms.\n\n"
                             f"_Probe snippet:_ {diag[:280]}"
                         )
-
-st.divider()
-with st.expander("Manual URL queue (when sitemaps are blocked e.g. Cloudflare)", expanded=False):
-    st.markdown(
-        "Paste **https://…** URLs for this site origin, one per line. "
-        "You can build the list on your **laptop** (where sitemap discovery works), from a CMS export, "
-        "or copy from browser devtools — then archive here on Cloud."
-    )
-    manual_txt = st.text_area("URLs (one per line)", height=140, key="ss_manual_lines", label_visibility="collapsed")
-    upl = st.file_uploader("Optional: append from `.txt` or `.csv` (first column cell per row)", type=["txt", "csv"], key="ss_manual_file")
-    if st.button("Replace queue with pasted / file URLs", key="ss_manual_replace"):
-        fn = (upl.name or "urls.txt").lower() if upl is not None else "urls.txt"
-        raw_lines = _bulk_url_lines(manual_txt, upl.getvalue() if upl is not None else None, fn)
-        good, bad = _manual_url_queue(raw_lines, store_site=store)
-        st.session_state["site_scraper_queue"] = good
-        if good:
-            st.success(f"Queued **{len(good)}** URLs (host allowed for «{store.canonical_root_host}»).")
-        else:
-            st.warning("No valid URLs for this origin — check each line starts with `https://` and matches the site host.")
-        if bad:
-            st.caption(f"Dropped **{len(bad)}** URLs (wrong host for this store).")
 
 urls = st.session_state.get("site_scraper_queue") or []
 

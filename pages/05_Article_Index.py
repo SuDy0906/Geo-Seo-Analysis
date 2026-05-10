@@ -10,13 +10,14 @@ from pathlib import Path
 from urllib.parse import urljoin
 
 import pandas as pd
-import requests
 import streamlit as st
 
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from http_session import make_fetch_session  # noqa: E402
+from seo_audit import attach_default_headers  # noqa: E402
 from fxstreet_scraper import discover_urls_for_scrape  # noqa: E402
 from generic_sitemap import crawl_sitemap_urls  # noqa: E402
 from scraper_store import (  # noqa: E402
@@ -63,7 +64,8 @@ m3.metric("Pages with bodies", stats["ok_bodies"])
 m4.metric("Article registry rows", stats["article_registry"])
 m5.metric("Articles with HTML", stats["article_with_html"])
 
-sess = requests.Session()
+sess = make_fetch_session()
+attach_default_headers(sess)
 pause = FETCH_PAUSE_SEC
 skip_ok = True
 
