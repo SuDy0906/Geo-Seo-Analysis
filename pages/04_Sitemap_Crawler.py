@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:
 
 from fxstreet_scraper import discover_urls_for_scrape  # noqa: E402
 from generic_sitemap import crawl_sitemap_urls  # noqa: E402
+from seo_audit import DEFAULT_HEADERS, SITEMAP_ALL_URL  # noqa: E402
 from scraper_store import (  # noqa: E402
     clear_store,
     fetch_and_store_url,
@@ -52,6 +53,19 @@ m2.metric("Indexed URLs", stats["rows"])
 m3.metric("Pages with bodies", stats["ok_bodies"])
 
 sess = requests.Session()
+sess.headers.update(DEFAULT_HEADERS)
+
+
+def _probe_sitemap(seed: str, *, timeout: float = 35.0) -> tuple[int | None, str]:
+    """Return (HTTP status or None on transport error, short diagnostic text)."""
+    try:
+        r = sess.get(seed.strip(), timeout=timeout)
+        body = (r.text or "")[:400].replace("\n", " ")
+        suf = "…" if len(r.text or "") > 400 else ""
+        return r.status_code, f"{body}{suf}"
+    except requests.RequestException as exc:
+        return None, str(exc)[:520]
+
 
 if store.is_fxstreet:
     st.caption(
@@ -79,6 +93,25 @@ if store.is_fxstreet:
             )
         st.session_state["site_scraper_queue"] = urls
         st.success(f"Queued **{len(urls)}** destinations.")
+        if not urls:
+            code, diag = _probe_sitemap(SITEMAP_ALL_URL, timeout=35.0)
+            if code == 200:
+                st.warning(
+                    "Discovery returned zero URLs although the seed sitemap responded **200**. "
+                    "Try raising **Maximum XML fetches**, or inspect whether the response XML uses "
+                    "unexpected namespaces or redirects."
+                )
+            elif code is not None:
+                st.warning(
+                    f"Sitemap probe **HTTP {code}**. Many hosts block cloud datacenter IPs; "
+                    "Streamlit Cloud egress may differ from your laptop.\n\n"
+                    f"_Probe snippet:_ {diag[:280]}"
+                )
+            else:
+                st.warning(
+                    "Could not reach the FXStreet sitemap over the network (transport error).\n\n"
+                    f"_Detail:_ {diag}"
+                )
 else:
     st.caption("Provide any discoverable XML index reachable from your host.")
     sm = st.text_input(
@@ -107,6 +140,22 @@ else:
             )
         st.session_state["site_scraper_queue"] = urls
         st.success(f"Queued **{len(urls)}** destinations.")
+        if not urls:
+            seed = (sm or "").strip()
+            if seed.startswith("http"):
+                code, diag = _probe_sitemap(seed)
+                if code is None:
+                    st.warning(
+                        "Could not reach your sitemap seed (transport error). "
+                        "Cloud hosting often differs from local DNS/firewall routing.\n\n"
+                        f"_Detail:_ {diag}"
+                    )
+                elif code >= 400:
+                    st.warning(
+                        f"Seed sitemap responded **HTTP {code}**. Check URL, HTTPS, "
+                        "and whether the remote site allows bots from hosted platforms.\n\n"
+                        f"_Probe snippet:_ {diag[:280]}"
+                    )
 
 urls = st.session_state.get("site_scraper_queue") or []
 
