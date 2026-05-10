@@ -5,6 +5,7 @@ plotly>=5.18.0
 requests>=2.31.0
 beautifulsoup4>=4.12.0
 trafilatura>=1.6.0
-spacy>=3.7.0
+spacy>=3.7.0,<3.8.0
+https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
 textstat>=0.7.3
 anthropic>=0.40.0

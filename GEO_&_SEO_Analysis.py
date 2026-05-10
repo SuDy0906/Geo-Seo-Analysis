@@ -1,4 +1,4 @@
-﻿"""
+"""
 FXStreet GEO · SEO Intelligence — launcher.
 """
 

@@ -1,4 +1,4 @@
-﻿"""
+"""
 FXStreet-only Foundation SEO technical audit (offline HTML).
 
 Fetches a single FXStreet URL and returns checks tuned to their Next.js
